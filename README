@@ -1,0 +1,59 @@
+About
+=====
+This is a kernel module for FreeBSD that will generate messages whenever any
+process forks, execves or exits. I originally wrote it to figure out how to
+speed up booting.
+
+
+Log Format
+==========
+The format of the log messages is:
+exectrace <syscall> <timestamp> <pid>-<ppid> [args]
+
+Where [args] is only printed for execve calls and <timestamp> are seconds
+elapsed since boot. For example:
+
+exectrace fork 4.814815017 27-25
+exectrace execve 4.814974395 27-25 /sbin/sysctl -n vfs.nfs.diskless_valid
+exectrace exit 4.816830217 27-25
+
+
+Tracing Boot
+============
+'make install' the module and to /boot/loader.conf add:
+
+exectrace_load="YES"
+kern.msgbufsize=4194304
+
+
+Parsing Logs
+============
+With the etparse.py script you can generate nicely formated output from
+exectrace logs. It will print a tree of processes. By default, it will read
+from stdin, so:
+
+dmesg | ./etparse.py
+
+may already do what you want. Alternatively, specify the file to read with
+-f, and you can force truncation of long lines with -t:
+
+./etparse.py -f mylog -t 80
+
+The output format is:
+<pid> <ppid> <runtime> <indent><command>
+
+<runtime> can have one of three values:
+- the time the process was alive
+- noexit (meaning the process didn't exit)
+- -0.0 (the process exited before it started, see below)
+
+
+Caveats / Bugs
+==============
+- to ensure log messages are not garbled, Giant is hold for printf. (This
+  behaviour can be disabled by defining __NO_LOCK at compile).
+
+- the time reported is not accurate. You may see adjacent fork, execve,
+  exit calls, even in that order but the time stamp on the exit call is
+  smaller then the one on fork, execve or both.
+
